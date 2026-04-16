@@ -6,4 +6,7 @@
     <Project Path="src/RelayWorker/RelayWorker.csproj" />
     <Project Path="src/Shared.Contracts/Shared.Contracts.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ArchitectureProof.Tests/ArchitectureProof.Tests.csproj" />
+  </Folder>
 </Solution>
