@@ -5,8 +5,18 @@ using OrderService.Infrastructure;
 using OrderService.Options;
 using OrderService.Services;
 using OrderService.Workers;
+using Serilog;
+using Serilog.Context;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, loggerConfiguration) =>
+{
+    loggerConfiguration
+        .ReadFrom.Configuration(context.Configuration)
+        .Enrich.FromLogContext()
+        .WriteTo.Console();
+});
 
 var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres")
     ?? throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
@@ -43,6 +53,22 @@ builder.Services
 var app = builder.Build();
 
 await DatabaseInitializer.InitializeAsync(postgresConnectionString, app.Lifetime.ApplicationStopping);
+
+app.Use(async (context, next) =>
+{
+    var correlationId = context.Request.Headers["X-Correlation-Id"].ToString();
+    if (string.IsNullOrWhiteSpace(correlationId))
+    {
+        correlationId = Guid.NewGuid().ToString();
+    }
+
+    context.Response.Headers["X-Correlation-Id"] = correlationId;
+
+    using (LogContext.PushProperty("CorrelationId", correlationId))
+    {
+        await next();
+    }
+});
 
 app.MapGet("/", () => Results.Ok(new { service = "order-service", status = "ok" }));
 

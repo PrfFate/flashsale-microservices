@@ -1,8 +1,11 @@
 using System.Text;
 using Npgsql;
+using Polly;
+using Polly.Retry;
 using RabbitMQ.Client;
 using RelayWorker.Models;
 using RelayWorker.Options;
+using Serilog.Context;
 
 namespace RelayWorker;
 
@@ -11,6 +14,15 @@ public sealed class Worker(
     IConfiguration configuration,
     RelayOptions relayOptions) : BackgroundService
 {
+    private readonly ResiliencePipeline _publishRetryPipeline = new ResiliencePipelineBuilder()
+        .AddRetry(new RetryStrategyOptions
+        {
+            MaxRetryAttempts = 3,
+            BackoffType = DelayBackoffType.Exponential,
+            Delay = TimeSpan.FromSeconds(1)
+        })
+        .Build();
+
     private readonly string _postgresConnectionString =
         configuration.GetConnectionString("Postgres")
         ?? throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
@@ -75,15 +87,25 @@ public sealed class Worker(
 
         foreach (var message in batch)
         {
-            try
+            using (LogContext.PushProperty("CorrelationId", message.CorrelationId))
             {
-                Publish(channel, message, relayOptions.ExchangeName);
-                await MarkAsProcessedAsync(connection, transaction, message.Id, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to publish outbox message {MessageId}", message.Id);
-                await MarkAsFailedAsync(connection, transaction, message.Id, ex.Message, cancellationToken);
+                try
+                {
+                    await _publishRetryPipeline.ExecuteAsync(
+                        _ =>
+                        {
+                            Publish(channel, message, relayOptions.ExchangeName);
+                            return default(ValueTask);
+                        },
+                        cancellationToken);
+
+                    await MarkAsProcessedAsync(connection, transaction, message.Id, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to publish outbox message {MessageId}", message.Id);
+                    await MarkAsFailedAsync(connection, transaction, message.Id, ex.Message, cancellationToken);
+                }
             }
         }
 

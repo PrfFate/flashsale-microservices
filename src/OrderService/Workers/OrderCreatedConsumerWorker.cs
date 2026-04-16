@@ -1,9 +1,12 @@
 using System.Text;
 using System.Text.Json;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 using OrderService.Options;
 using OrderService.Services;
+using Polly;
+using Polly.Retry;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using Serilog.Context;
 using Shared.Contracts.Events;
 
 namespace OrderService.Workers;
@@ -14,6 +17,15 @@ public sealed class OrderCreatedConsumerWorker(
     ConsumerOptions consumerOptions,
     OrderCreatedMessageProcessor processor) : BackgroundService
 {
+    private readonly ResiliencePipeline _retryPipeline = new ResiliencePipelineBuilder()
+        .AddRetry(new RetryStrategyOptions
+        {
+            MaxRetryAttempts = 3,
+            BackoffType = DelayBackoffType.Exponential,
+            Delay = TimeSpan.FromSeconds(1)
+        })
+        .Build();
+
     private IConnection? _connection;
     private IModel? _channel;
 
@@ -75,28 +87,31 @@ public sealed class OrderCreatedConsumerWorker(
         try
         {
             var payload = Encoding.UTF8.GetString(ea.Body.ToArray());
-            var integrationEvent = JsonSerializer.Deserialize<OrderCreatedEvent>(payload);
+            var integrationEvent = JsonSerializer.Deserialize<OrderCreatedEvent>(payload)
+                ?? throw new InvalidOperationException("OrderCreatedEvent payload is invalid.");
 
-            if (integrationEvent is null)
+            var correlationId = ea.BasicProperties.CorrelationId;
+            if (string.IsNullOrWhiteSpace(correlationId))
             {
-                throw new InvalidOperationException("OrderCreatedEvent payload is invalid.");
+                correlationId = integrationEvent.CorrelationId.ToString();
             }
 
-            await processor.ProcessAsync(messageId, integrationEvent, cancellationToken);
+            using (LogContext.PushProperty("CorrelationId", correlationId))
+            {
+                await _retryPipeline.ExecuteAsync(
+                    async token =>
+                    {
+                        await processor.ProcessAsync(messageId, integrationEvent, token);
+                    },
+                    cancellationToken);
+            }
+
             _channel.BasicAck(ea.DeliveryTag, false);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "OrderCreated processing failed. MessageId: {MessageId}", messageId);
-
-            if (ea.Redelivered)
-            {
-                _channel.BasicReject(ea.DeliveryTag, false);
-            }
-            else
-            {
-                _channel.BasicNack(ea.DeliveryTag, false, true);
-            }
+            logger.LogError(ex, "OrderCreated processing failed after retries. MessageId: {MessageId}", messageId);
+            _channel.BasicReject(ea.DeliveryTag, false);
         }
     }
 
