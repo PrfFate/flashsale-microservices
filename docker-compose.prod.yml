@@ -46,3 +46,15 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+
+  api-gateway:
+    image: micros/api-gateway:latest
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+    depends_on:
+      campaign-service:
+        condition: service_started
+      order-service:
+        condition: service_started

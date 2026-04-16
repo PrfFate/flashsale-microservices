@@ -60,3 +60,18 @@ services:
         condition: service_healthy
     ports:
       - "8083:8080"
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: src/ApiGateway/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+    depends_on:
+      campaign-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+    ports:
+      - "8080:8080"

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/ApiGateway/ApiGateway.csproj" />
     <Project Path="src/CampaignService/CampaignService.csproj" />
     <Project Path="src/OrderService/OrderService.csproj" />
     <Project Path="src/RelayWorker/RelayWorker.csproj" />
