@@ -2,15 +2,27 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OrderService.Contracts;
 using OrderService.Infrastructure;
+using OrderService.Options;
 using OrderService.Services;
+using OrderService.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres")
     ?? throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
 
+var consumerOptions = builder.Configuration
+    .GetSection(ConsumerOptions.SectionName)
+    .Get<ConsumerOptions>()
+    ?? new ConsumerOptions();
+
+builder.Services.AddSingleton(consumerOptions);
 builder.Services.AddSingleton<IOrderCommandService>(_ => new OrderCommandService(postgresConnectionString));
 builder.Services.AddSingleton(_ => new InventoryBootstrapService(postgresConnectionString));
+builder.Services.AddSingleton(_ => new OrderCreatedMessageProcessor(postgresConnectionString, consumerOptions));
+builder.Services.AddHostedService<OrderCreatedConsumerWorker>();
+
+var rabbitMqConnectionString = builder.Configuration.GetConnectionString("RabbitMq");
 
 builder.Services
     .AddHealthChecks()
@@ -19,6 +31,12 @@ builder.Services
     {
         return string.IsNullOrWhiteSpace(postgresConnectionString)
             ? HealthCheckResult.Unhealthy("ConnectionStrings:Postgres missing")
+            : HealthCheckResult.Healthy();
+    }, tags: ["ready"])
+    .AddCheck("rabbit-config", () =>
+    {
+        return string.IsNullOrWhiteSpace(rabbitMqConnectionString)
+            ? HealthCheckResult.Unhealthy("ConnectionStrings:RabbitMq missing")
             : HealthCheckResult.Healthy();
     }, tags: ["ready"]);
 

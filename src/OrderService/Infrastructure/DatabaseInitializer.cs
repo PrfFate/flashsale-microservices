@@ -39,6 +39,13 @@ public static class DatabaseInitializer
                 last_error TEXT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS processed_messages (
+                message_id VARCHAR(128) NOT NULL,
+                consumer_name VARCHAR(128) NOT NULL,
+                processed_on_utc TIMESTAMPTZ NOT NULL,
+                PRIMARY KEY (message_id, consumer_name)
+            );
+
             CREATE INDEX IF NOT EXISTS ix_outbox_messages_processed_at_utc
                 ON outbox_messages (processed_at_utc);
 
