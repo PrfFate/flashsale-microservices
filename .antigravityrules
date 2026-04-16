@@ -1,0 +1,67 @@
+# Proje Tanımı
+
+Bu proje, kampanyalı ve stok adedi sınırlı ürünlerin yüksek eşzamanlı kullanıcı trafiği altında güvenli, tutarlı ve performanslı biçimde satışını gerçekleştirebilen mikroservis tabanlı bir sipariş platformu geliştirmek amacıyla tasarlanmıştır.
+
+Sistemin temel hedefi, özellikle flash sale, günlük fırsat, özel indirim ve sınırlı stok senaryolarında ortaya çıkan teknik problemleri çözmektir. Bu tür senaryolarda aynı ürüne çok kısa sürede yüzlerce hatta binlerce istek gelebilir. Eğer sistem doğru tasarlanmazsa stokların negatif düşmesi, aynı ürünün birden fazla kullanıcıya hatalı biçimde satılması, sipariş ve envanter verilerinin tutarsız hale gelmesi ve mesajlaşma altyapısında veri kaybı yaşanması gibi ciddi problemler ortaya çıkabilir.
+
+Bu projede geliştirilen yapı, bu problemleri çözmek için kampanya okuma tarafı ile sipariş yazma tarafını birbirinden ayıran bir mikroservis mimarisi kullanır. Kampanya servisi, ürün ve kampanya bilgilerini yüksek okuma performansı ile sunarken; sipariş servisi, sipariş oluşturma, stok doğrulama ve sipariş durum yönetimi gibi kritik işlemleri güvenilir transaction yapıları ile yürütür. Servisler arası iletişim asenkron mesajlaşma ile sağlanır ve veri tutarlılığı için outbox pattern, idempotent consumer, optimistic concurrency ve retry/DLQ mekanizmaları uygulanır.
+
+Bu ürünün örnek kullanım senaryosu, “günün fırsatı” olarak satışa çıkarılan sınırlı stoklu elektronik ürünler, restoran kampanya paketleri, indirimli etkinlik biletleri veya belirli süreyle satışta kalan promosyon ürünleri olabilir. Kullanıcılar kampanya listesini hızlıca görüntüleyebilir, ürün detaylarını inceleyebilir ve sipariş oluşturabilir. Sistem, yüksek trafik altında yalnızca mevcut stok kadar başarılı sipariş oluşturulmasını garanti etmeyi hedefler.
+
+Projenin nihai amacı yalnızca çalışan bir e-ticaret demosu üretmek değil; dağıtık sistemlerde veri tutarlılığı, yarış durumu yönetimi, güvenilir event publishing, idempotent message consumption, cache kullanımı ve gözlemlenebilirlik gibi gerçek dünya backend problemlerine çözüm üreten, ölçeklenebilir ve savunulabilir bir yazılım mimarisi ortaya koymaktır.
+
+---
+
+# Final Mikroservis Yol Haritası
+
+Bu dosya, projenin geliştirme standartlarını ve fazlarını içerir. Antigravity bu plana sadık kalarak ilerleyecektir.
+
+## Faz 0: Temeller ve Ortak Kontratlar (Foundations & Shared Contracts)
+- `docker-compose.yml` hazırla (PostgreSQL, MongoDB, Redis, RabbitMQ)
+- Her servis için healthcheck yapılandırması
+- `Shared.Contracts` kütüphanesini oluştur
+- `IntegrationEvent` base record’unu tanımla
+  - EventId, CorrelationId, OccurredOnUtc
+- Event kontratlarını oluştur
+  - OrderCreatedEvent, OrderCompletedEvent, OrderRejectedEvent
+- Tüm servislerde health endpointlerini aç (/health/live, /health/ready)
+
+## Faz 1: Kampanya Servisi (Campaign Service - Read Model)
+- MongoDB bağlantısını kur ve doküman şemasını oluştur
+- Minimal API endpointleri (listeleme, detay)
+- Redis cache-aside pattern (Redis -> Mongo -> Redis 10dk TTL)
+- Not: CQRS/MediatR kullanılmayacak.
+
+## Faz 2: Sipariş Servisi (Order Service - Write + Outbox)
+- PostgreSQL şeması (Orders, Inventory, OutboxMessages)
+- Order durumları: Pending, Completed, Rejected, Failed
+- Inventory için optimistic concurrency (xmin veya Version)
+- Single Transaction Flow: Order (Pending) + OutboxMessage (OrderCreatedEvent)
+
+## Faz 3: Relay Worker (Reliable Publisher)
+- Background service (her 5 sn outbox tarama)
+- Concurrency control (FOR UPDATE SKIP LOCKED)
+- RabbitMQ publish ve durum güncelleme (ProcessedAtUtc, ErrorCount)
+
+## Faz 4: Idempotent Consumer & Order State Machine
+- RabbitMQ topolojisi (Exchange, Queues, DLQ)
+- `ProcessedMessages` tablosu (Idempotency için)
+- Consumer Akışı:
+  - Idempotency kontrolü
+  - Transaction başlat: Stok kontrolü -> Stok düşme -> Statü güncelleme -> Event üretme -> Processed kaydı ekle -> Commit.
+
+## Faz 5: Dayanıklılık ve Gözlemlenebilirlik (Resiliency & Observability)
+- Polly exponential backoff retry (3 deneme)
+- DLQ yönlendirmesi
+- Structured logging & CorrelationId (Serilog)
+
+## Faz 6: Edge & Security
+- YARP veya Ocelot API Gateway
+- JWT Authentication & Authorization
+- Rate limiting (IP bazlı, bot koruması)
+
+## Faz 7: Doğrulama ve Mimari Kanıt (Verification & Architecture Proof)
+- Testcontainers.NET ile entegrasyon testleri
+- Race condition testleri (500 paralel istek)
+- Idempotency testleri
+- ADR (Architecture Decision Records) dokümantasyonu
