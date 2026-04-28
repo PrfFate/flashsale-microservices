@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shared.Contracts\Shared.Contracts.csproj" />
+    <ProjectReference Include="..\Shared.BuildingBlocks\Shared.BuildingBlocks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -65,3 +65,26 @@ Bu dosya, projenin geliştirme standartlarını ve fazlarını içerir. Antigrav
 - Race condition testleri (500 paralel istek)
 - Idempotency testleri
 - ADR (Architecture Decision Records) dokümantasyonu
+
+---
+
+# Kurumsal Dönüşüm Eki (Best Practice / SOLID)
+
+Bu proje canlıya çıkmayacak olsa da kurumsal standartta geliştirilecektir.
+Ücretli araç kullanılmayacak, yalnızca açık kaynak/ücretsiz araçlar tercih edilecektir.
+
+## Zorunlu Standartlar
+- Global exception handling (tüm servislerde tek tip)
+- RFC7807 ProblemDetails hata kontratı
+- FluentValidation ile merkezi validation pipeline
+- AutoMapper veya standart mapping katmanı
+- CorrelationId zorunlu taşıma
+- Domain/Application/Infrastructure/API ayrımı
+- Serilog structured logging
+- Testcontainers ile entegrasyon testleri
+- ADR güncellemesi
+
+## Teknik Notlar
+- Güvenlik ve kalite açıkları olan bağımlılıklar kullanılmayacaktır.
+- Her yeni endpoint merkezi exception + validation + correlation politikalarına otomatik dahil olmalıdır.
+- Her faz bağımsız commit olarak işlenecektir.

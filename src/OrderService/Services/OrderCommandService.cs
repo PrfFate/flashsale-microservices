@@ -3,6 +3,7 @@ using System.Text.Json;
 using Npgsql;
 using OrderService.Contracts;
 using OrderService.Domain;
+using OrderService.Mapping;
 using Shared.Contracts.Events;
 
 namespace OrderService.Services;
@@ -13,16 +14,6 @@ public sealed class OrderCommandService(string connectionString) : IOrderCommand
         CreateOrderRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (request.Quantity <= 0)
-        {
-            return (false, "Quantity must be greater than zero.", null);
-        }
-
-        if (request.UnitPrice < 0)
-        {
-            return (false, "UnitPrice cannot be negative.", null);
-        }
-
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
@@ -54,12 +45,7 @@ public sealed class OrderCommandService(string connectionString) : IOrderCommand
 
         await transaction.CommitAsync(cancellationToken);
 
-        return (true, null, new CreateOrderResponse
-        {
-            OrderId = orderId,
-            Status = OrderStatus.Pending,
-            CorrelationId = correlationId
-        });
+        return (true, null, OrderResponseMapper.ToPendingResponse(orderId, correlationId));
     }
 
     private static async Task<bool> HasSufficientStockAsync(

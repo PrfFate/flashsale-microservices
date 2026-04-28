@@ -4,9 +4,11 @@ using OrderService.Contracts;
 using OrderService.Infrastructure;
 using OrderService.Options;
 using OrderService.Services;
+using OrderService.Validation;
 using OrderService.Workers;
 using Serilog;
-using Serilog.Context;
+using Shared.BuildingBlocks.Extensions;
+using Shared.BuildingBlocks.Filters;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +33,8 @@ builder.Services.AddSingleton<IOrderCommandService>(_ => new OrderCommandService
 builder.Services.AddSingleton(_ => new InventoryBootstrapService(postgresConnectionString));
 builder.Services.AddSingleton(_ => new OrderCreatedMessageProcessor(postgresConnectionString, consumerOptions));
 builder.Services.AddHostedService<OrderCreatedConsumerWorker>();
+builder.Services.AddCorporateApiFoundation();
+builder.Services.AddCorporateValidation(typeof(CreateOrderRequestValidator));
 
 var rabbitMqConnectionString = builder.Configuration.GetConnectionString("RabbitMq");
 
@@ -54,21 +58,7 @@ var app = builder.Build();
 
 await DatabaseInitializer.InitializeAsync(postgresConnectionString, app.Lifetime.ApplicationStopping);
 
-app.Use(async (context, next) =>
-{
-    var correlationId = context.Request.Headers["X-Correlation-Id"].ToString();
-    if (string.IsNullOrWhiteSpace(correlationId))
-    {
-        correlationId = Guid.NewGuid().ToString();
-    }
-
-    context.Response.Headers["X-Correlation-Id"] = correlationId;
-
-    using (LogContext.PushProperty("CorrelationId", correlationId))
-    {
-        await next();
-    }
-});
+app.UseCorporateApiFoundation();
 
 app.MapGet("/", () => Results.Ok(new { service = "order-service", status = "ok" }));
 
@@ -82,18 +72,15 @@ app.MapPost("/api/orders", async (CreateOrderRequest request, IOrderCommandServi
     }
 
     return Results.Accepted($"/api/orders/{result.Response!.OrderId}", result.Response);
-});
+})
+.AddEndpointFilter<ValidationFilter<CreateOrderRequest>>();
 
 app.MapPost("/api/inventory", async (UpsertInventoryRequest request, InventoryBootstrapService inventoryBootstrapService, CancellationToken cancellationToken) =>
 {
-    if (request.AvailableQuantity < 0)
-    {
-        return Results.BadRequest(new { error = "AvailableQuantity cannot be negative." });
-    }
-
     await inventoryBootstrapService.UpsertAsync(request, cancellationToken);
     return Results.Ok();
-});
+})
+.AddEndpointFilter<ValidationFilter<UpsertInventoryRequest>>();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {

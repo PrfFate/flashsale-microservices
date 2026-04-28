@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flashsale Operations</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Flashsale Microservices</p>
+        <h1>Operations Console</h1>
+      </div>
+      <button id="healthButton" class="secondary" type="button">Check Gateway</button>
+    </header>
+
+    <section class="grid">
+      <form id="tokenForm" class="panel">
+        <h2>Auth Token</h2>
+        <label>
+          Subject
+          <input id="subject" name="subject" value="demo-user" autocomplete="off">
+        </label>
+        <button type="submit">Create Token</button>
+        <pre id="tokenOutput" class="output">No token yet.</pre>
+      </form>
+
+      <section class="panel">
+        <h2>Campaigns</h2>
+        <button id="campaignButton" type="button">Load Campaigns</button>
+        <pre id="campaignOutput" class="output">Campaign read model is empty until MongoDB is seeded.</pre>
+      </section>
+
+      <form id="inventoryForm" class="panel">
+        <h2>Inventory Seed</h2>
+        <label>
+          Product Id
+          <input id="inventoryProductId" name="productId" placeholder="00000000-0000-0000-0000-000000000000">
+        </label>
+        <label>
+          Quantity
+          <input id="inventoryQuantity" name="quantity" type="number" min="0" value="100">
+        </label>
+        <button type="submit">Upsert Inventory</button>
+        <pre id="inventoryOutput" class="output">Requires token.</pre>
+      </form>
+
+      <form id="orderForm" class="panel">
+        <h2>Create Order</h2>
+        <label>
+          Product Id
+          <input id="orderProductId" name="productId" placeholder="00000000-0000-0000-0000-000000000000">
+        </label>
+        <div class="split">
+          <label>
+            Quantity
+            <input id="orderQuantity" name="quantity" type="number" min="1" value="1">
+          </label>
+          <label>
+            Unit Price
+            <input id="unitPrice" name="unitPrice" type="number" min="0" step="0.01" value="199.99">
+          </label>
+        </div>
+        <button type="submit">Create Pending Order</button>
+        <pre id="orderOutput" class="output">Requires token.</pre>
+      </form>
+    </section>
+  </main>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

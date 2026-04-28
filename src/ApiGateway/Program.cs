@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
+using Shared.BuildingBlocks.Extensions;
 using Yarp.ReverseProxy;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -64,10 +65,14 @@ builder.Services.AddRateLimiter(options =>
 builder.Services
     .AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+builder.Services.AddCorporateApiFoundation();
 
 var app = builder.Build();
 
 app.UseSerilogRequestLogging();
+app.UseCorporateApiFoundation();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

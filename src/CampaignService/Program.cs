@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using MongoDB.Driver;
 using Serilog;
+using Shared.BuildingBlocks.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +39,7 @@ builder.Services.AddStackExchangeRedisCache(options =>
 
 builder.Services.AddScoped<ICampaignReadRepository, MongoCampaignReadRepository>();
 builder.Services.AddScoped<ICampaignQueryService, CachedCampaignQueryService>();
+builder.Services.AddCorporateApiFoundation();
 
 var mongoConnectionString = builder.Configuration.GetConnectionString("Mongo");
 var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
@@ -60,6 +62,8 @@ builder.Services
     }, tags: ["ready"]);
 
 var app = builder.Build();
+
+app.UseCorporateApiFoundation();
 
 app.MapGet("/", () => Results.Ok(new { service = "campaign-service", status = "ok" }));
 
